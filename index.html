@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>11 Plus Genius</title>
+    <title>11+ Gen67</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
@@ -16,12 +16,22 @@
             },
             colors: {
               kid: {
-                primary: '#4F46E5', // Indigo 600
-                secondary: '#06B6D4', // Cyan 500
-                accent: '#F97316', // Orange 500
-                background: '#F3F4F6', // Gray 100
+                primary: '#2563EB', // Blue 600
+                primaryLight: '#DBEAFE', // Blue 100
+                secondary: '#0891B2', // Cyan 600
+                secondaryLight: '#CFFAFE', // Cyan 100
+                accent: '#EA580C', // Orange 600
+                accentLight: '#FFEDD5', // Orange 100
+                background: '#F8FAFC', // Slate 50
                 surface: '#FFFFFF',
+                text: '#1E293B', // Slate 800
+                muted: '#64748B', // Slate 500
               }
+            },
+            boxShadow: {
+              'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+              'glow-primary': '0 4px 14px 0 rgba(37, 99, 235, 0.4)', // Blue glow
+              'glow-accent': '0 4px 14px 0 rgba(234, 88, 12, 0.4)',
             }
           }
         }
@@ -34,12 +44,13 @@
     "react/": "https://aistudiocdn.com/react@^19.2.1/",
     "react": "https://aistudiocdn.com/react@^19.2.1",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.45.0"
   }
 }
 </script>
 </head>
-  <body>
+  <body class="bg-kid-background text-kid-text antialiased selection:bg-kid-primaryLight selection:text-kid-primary">
     <div id="root"></div>
   </body>
 </html>
