@@ -1,13 +1,15 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Question, AIGeneratedTopic, RoadmapAnalysis } from '../types';
 
 export const getAiClient = () => {
-  if (!process.env.API_KEY) {
-    console.warn("API_KEY is missing from environment");
+  // FIX: Use import.meta.env for Vite instead of process.env
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  
+  if (!apiKey) {
+    console.warn("VITE_GEMINI_API_KEY is missing from environment");
     return null;
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey });
 };
 
 const getMockQuestions = (subjectInput: string | string[], count: number, difficulty: string): Question[] => {
