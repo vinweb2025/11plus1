@@ -3,11 +3,11 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { Question, AIGeneratedTopic, RoadmapAnalysis } from '../types';
 
 export const getAiClient = () => {
-  if (!process.env.API_KEY) {
+  if (!process.env.API_KEY || 'FAKE_API_KEY_FOR_DEVELOPMENT') {
     console.warn("API_KEY is missing from environment");
     return null;
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY || 'FAKE_API_KEY_FOR_DEVELOPMENT' });
 };
 
 const getMockQuestions = (subjectInput: string | string[], count: number, difficulty: string): Question[] => {
