@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTestQuestions, generateRoadmapSuggestion } from '../services/geminiService';
@@ -170,6 +169,11 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
 
   const pendingTests = selectedDayTests.filter(t => !t.completed);
   const completedTests = selectedDayTests.filter(t => t.completed);
+
+  // Define availableRewards (Fix for missing variable)
+  const availableRewards = useMemo(() => {
+    return rewards.filter(r => !r.parentId || r.parentId === effectiveParentId);
+  }, [rewards, effectiveParentId]);
 
   // Toggle helpers for Test Topics
   const availableTestTopics = topics.filter(t => t.subjectId === testSubjectId);
@@ -911,7 +915,136 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
       )}
 
       {/* --- REWARDS MODAL --- */}
-      {/* ... [Unchanged] ... */}
+      {modalMode === 'rewards' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+           <div className="bg-white w-full max-w-4xl rounded-3xl shadow-xl overflow-hidden border border-gray-100 max-h-[90vh] flex flex-col">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
+                 <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><ShoppingBag className="w-5 h-5 text-yellow-600"/> Reward Center</h3>
+                 <button onClick={() => setModalMode('none')} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X className="w-5 h-5"/></button>
+              </div>
+              
+              <div className="flex border-b border-gray-100 px-6 bg-white shrink-0">
+                 <button onClick={() => setRewardTab('catalog')} className={`py-4 text-sm font-bold border-b-2 px-4 transition ${rewardTab === 'catalog' ? 'border-yellow-500 text-yellow-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Reward Catalog</button>
+                 <button onClick={() => setRewardTab('requests')} className={`py-4 text-sm font-bold border-b-2 px-4 transition ${rewardTab === 'requests' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+                    Requests {rewardRequests.filter(r => r.status === 'PENDING' && myStudents.some(s => s.id === r.studentId)).length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">{rewardRequests.filter(r => r.status === 'PENDING' && myStudents.some(s => s.id === r.studentId)).length}</span>}
+                 </button>
+                 <button onClick={() => setRewardTab('rules')} className={`py-4 text-sm font-bold border-b-2 px-4 transition ${rewardTab === 'rules' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Point Rules</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+                 {rewardTab === 'catalog' && (
+                    <div className="space-y-6">
+                       {/* Create Reward Form */}
+                       <div className="bg-white p-4 rounded-2xl border border-yellow-100 shadow-sm">
+                          <h4 className="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wide">Add New Reward</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                             <input className="p-2 border border-gray-200 rounded-xl text-sm" placeholder="Reward Name" value={rewardForm.name} onChange={e => setRewardForm({...rewardForm, name: e.target.value})} />
+                             <input className="p-2 border border-gray-200 rounded-xl text-sm" type="number" placeholder="Cost" value={rewardForm.cost} onChange={e => setRewardForm({...rewardForm, cost: Number(e.target.value)})} />
+                             <select className="p-2 border border-gray-200 rounded-xl text-sm" value={rewardForm.icon} onChange={e => setRewardForm({...rewardForm, icon: e.target.value})}>
+                                {REWARD_ICONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
+                             </select>
+                             <button onClick={handleCreateReward} disabled={!rewardForm.name} className="bg-yellow-500 text-white font-bold rounded-xl text-sm hover:bg-yellow-600 transition disabled:opacity-50">Add Reward</button>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs font-bold text-gray-500">
+                             <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={!!rewardForm.approvalRequired} onChange={e => setRewardForm({...rewardForm, approvalRequired: e.target.checked})} /> Require Approval</label>
+                          </div>
+                       </div>
+
+                       {/* Rewards List */}
+                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {availableRewards.map(r => (
+                             <div key={r.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative group">
+                                <div className="flex justify-between items-start">
+                                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${r.color}`}>{getRewardIcon(r.icon)}</div>
+                                   <div className="text-right">
+                                      <p className="font-black text-yellow-600">{r.cost}</p>
+                                      <p className="text-[10px] text-gray-400 uppercase font-bold">Coins</p>
+                                   </div>
+                                </div>
+                                <h4 className="font-bold text-gray-900 mt-2">{r.name}</h4>
+                                <p className="text-xs text-gray-500 mt-1">{r.approvalRequired ? 'Approval Required' : 'Instant Redeem'}</p>
+                                <button onClick={() => deleteReward(r.id)} className="absolute top-2 right-2 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition"><Trash2 className="w-4 h-4"/></button>
+                             </div>
+                          ))}
+                       </div>
+                    </div>
+                 )}
+
+                 {rewardTab === 'requests' && (
+                    <div className="space-y-4">
+                       {rewardRequests.filter(r => myStudents.some(s => s.id === r.studentId)).length === 0 && (
+                          <div className="text-center py-12 text-gray-400"><p>No reward requests found.</p></div>
+                       )}
+                       {rewardRequests.filter(r => myStudents.some(s => s.id === r.studentId)).map(req => (
+                          <div key={req.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+                             <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">{getRewardIcon(req.rewardIcon)}</div>
+                                <div>
+                                   <h4 className="font-bold text-gray-900">{req.rewardName}</h4>
+                                   <p className="text-xs text-gray-500 font-bold">{users.find(u => u.id === req.studentId)?.name} • {new Date(req.requestDate).toLocaleDateString()}</p>
+                                   <p className="text-xs font-bold text-yellow-600">{req.cost} Coins</p>
+                                </div>
+                             </div>
+                             <div className="flex items-center gap-2">
+                                {req.status === 'PENDING' && (
+                                   <>
+                                      <button onClick={() => rejectRewardRequest(req.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs hover:bg-red-100">Reject</button>
+                                      <button onClick={() => approveRewardRequest(req.id)} className="px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-xs hover:bg-green-700 shadow-md shadow-green-200">Approve</button>
+                                   </>
+                                )}
+                                {req.status === 'APPROVED' && <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold">Approved</span>}
+                                {req.status === 'REJECTED' && <span className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-bold">Rejected</span>}
+                             </div>
+                          </div>
+                       ))}
+                    </div>
+                 )}
+
+                 {rewardTab === 'rules' && (
+                    <div className="space-y-6">
+                       <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-purple-900 text-sm">
+                          Configure how many coins students earn for different activities.
+                       </div>
+                       
+                       <div className="grid grid-cols-1 gap-4">
+                          {pointRules.map(rule => (
+                             <div key={rule.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
+                                <div>
+                                   <h4 className="font-bold text-gray-900">{rule.category}</h4>
+                                   <p className="text-xs text-gray-500">Base Points: {rule.basePoints}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                   <button 
+                                      onClick={() => updatePointRule({...rule, basePoints: Math.max(0, rule.basePoints - 5)})} 
+                                      className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+                                   >-</button>
+                                   <span className="font-bold w-8 text-center">{rule.basePoints}</span>
+                                   <button 
+                                      onClick={() => updatePointRule({...rule, basePoints: rule.basePoints + 5})} 
+                                      className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200"
+                                   >+</button>
+                                </div>
+                             </div>
+                          ))}
+                       </div>
+
+                       <div className="pt-6 border-t border-gray-100">
+                          <h4 className="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wide">Manual Adjustment</h4>
+                          <div className="flex gap-3">
+                             <select className="p-2 border border-gray-200 rounded-xl text-sm font-bold bg-white" onChange={e => setSelectedStudentId(e.target.value)} value={selectedStudentId}>
+                                {myStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                             </select>
+                             <input type="number" placeholder="Points (+/-)" className="p-2 border border-gray-200 rounded-xl text-sm w-24" value={manualPointForm.amount} onChange={e => setManualPointForm({...manualPointForm, amount: Number(e.target.value)})} />
+                             <input type="text" placeholder="Reason" className="flex-1 p-2 border border-gray-200 rounded-xl text-sm" value={manualPointForm.reason} onChange={e => setManualPointForm({...manualPointForm, reason: e.target.value})} />
+                             <button onClick={handleManualPoints} className="bg-blue-600 text-white font-bold px-4 rounded-xl text-sm hover:bg-blue-700">Apply</button>
+                          </div>
+                       </div>
+                    </div>
+                 )}
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* --- STUDY PLAN MODAL --- */}
       {modalMode === 'study' && (
@@ -1022,149 +1155,4 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
                      </div>
                   </div>
                </div>
-               <div className="p-6 border-t border-gray-100 bg-gray-50 shrink-0">
-                  <button onClick={handleAssignTest} disabled={isGenerating || testTopicIds.length === 0} className="w-full py-3.5 bg-orange-600 text-white font-bold rounded-xl shadow-lg hover:bg-orange-700 transition disabled:opacity-70 flex items-center justify-center gap-2">
-                     {isGenerating ? <Loader2 className="animate-spin w-5 h-5"/> : (testSource === 'AI' ? <BrainCircuit className="w-5 h-5"/> : <Database className="w-5 h-5"/>)}
-                     {isGenerating ? (testSource === 'AI' ? 'Generating Questions...' : 'Fetching Questions...') : (testSource === 'AI' ? 'Generate & Assign Test' : 'Assign from Question Bank')}
-                  </button>
-               </div>
-            </div>
-         </div>
-      )}
-
-      {/* --- MOCK EXAM MODAL --- */}
-      {/* ... [Existing Mock Modal Unchanged] ... */}
-      {modalMode === 'mock' && (
-         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white w-full max-w-lg rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                  <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><Layers className="w-5 h-5 text-purple-600"/> Create Mock Exam</h3>
-                  <button onClick={() => setModalMode('none')} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X className="w-5 h-5"/></button>
-               </div>
-               <div className="p-6 space-y-5">
-                  <div>
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Included Subjects</label>
-                     <div className="space-y-2">
-                        {subjects.map(s => (
-                           <div key={s.id} onClick={() => toggleMockSubject(s.id)} className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition ${mockSubjectIds.includes(s.id) ? 'bg-purple-50 border-purple-200' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                              <div className="flex items-center gap-3">
-                                 <div className={`p-2 rounded-lg ${s.color} text-white`}>{getIconComponent(s.icon)}</div>
-                                 <span className="font-bold text-sm text-gray-800">{s.name}</span>
-                              </div>
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${mockSubjectIds.includes(s.id) ? 'bg-purple-600 border-purple-600' : 'bg-white border-gray-300'}`}>
-                                 {mockSubjectIds.includes(s.id) && <Check className="w-3 h-3 text-white"/>}
-                              </div>
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Difficulty</label>
-                        <select className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-medium" value={mockDifficulty} onChange={e => setMockDifficulty(e.target.value as DifficultyLevel)}>
-                           <option value={DifficultyLevel.MEDIUM}>Standard</option>
-                           <option value={DifficultyLevel.HARD}>Challenge</option>
-                        </select>
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Total Questions</label>
-                        <input type="number" className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-medium" value={mockQuestionCount} onChange={e => setMockQuestionCount(Number(e.target.value))} min={20} max={100} step={10}/>
-                     </div>
-                  </div>
-
-                  <button onClick={handleAssignMock} disabled={isGenerating || mockSubjectIds.length === 0} className="w-full py-3.5 bg-purple-600 text-white font-bold rounded-xl shadow-lg hover:bg-purple-700 transition disabled:opacity-70 flex items-center justify-center gap-2 mt-2">
-                     {isGenerating ? <Loader2 className="animate-spin w-5 h-5"/> : <Layers className="w-5 h-5"/>}
-                     {isGenerating ? 'Building Exam...' : 'Generate Mock Exam'}
-                  </button>
-               </div>
-            </div>
-         </div>
-      )}
-
-      {/* --- BASELINE TEST MODAL --- */}
-      {/* ... [Existing Baseline Modal Unchanged] ... */}
-      {modalMode === 'baseline' && (
-         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white w-full max-w-lg rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                  <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-slate-600"/> Create Baseline Test</h3>
-                  <button onClick={() => setModalMode('none')} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X className="w-5 h-5"/></button>
-               </div>
-               <div className="p-6 space-y-5">
-                  <p className="text-sm text-gray-500 mb-4">A comprehensive 50-question test to assess initial subject knowledge.</p>
-                  <div>
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Subjects Covered</label>
-                     <div className="space-y-2">
-                        {subjects.map(s => (
-                           <div key={s.id} onClick={() => toggleBaselineSubject(s.id)} className={`flex items-center justify-between p-3 rounded-xl cursor-pointer border transition ${baselineSubjectIds.includes(s.id) ? 'bg-slate-50 border-slate-300' : 'bg-white border-gray-200 hover:border-gray-300'}`}>
-                              <div className="flex items-center gap-3">
-                                 <div className={`p-2 rounded-lg ${s.color} text-white`}>{getIconComponent(s.icon)}</div>
-                                 <span className="font-bold text-sm text-gray-800">{s.name}</span>
-                              </div>
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${baselineSubjectIds.includes(s.id) ? 'bg-slate-600 border-slate-600' : 'bg-white border-gray-300'}`}>
-                                 {baselineSubjectIds.includes(s.id) && <Check className="w-3 h-3 text-white"/>}
-                              </div>
-                           </div>
-                        ))}
-                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Difficulty</label>
-                        <select className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500 font-medium" value={baselineDifficulty} onChange={e => setBaselineDifficulty(e.target.value as DifficultyLevel)}>
-                           <option value={DifficultyLevel.EASY}>Easy</option>
-                           <option value={DifficultyLevel.MEDIUM}>Medium</option>
-                           <option value={DifficultyLevel.HARD}>Hard</option>
-                           <option value={DifficultyLevel.MIXED}>Mixed</option>
-                        </select>
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Total Questions</label>
-                        <input type="number" className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500 font-medium" value={baselineQuestionCount} onChange={e => setBaselineQuestionCount(Number(e.target.value))} min={10} max={100} step={10}/>
-                     </div>
-                  </div>
-
-                  <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time Limit (Minutes)</label>
-                      <input type="number" className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500 font-medium" value={baselineDuration} onChange={e => setBaselineDuration(Number(e.target.value))} min={10} max={180} step={5}/>
-                  </div>
-
-                  <button onClick={handleCreateBaseline} disabled={isGenerating || baselineSubjectIds.length === 0} className="w-full py-3.5 bg-slate-700 text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition disabled:opacity-70 flex items-center justify-center gap-2 mt-2">
-                     {isGenerating ? <Loader2 className="animate-spin w-5 h-5"/> : <TrendingUp className="w-5 h-5"/>}
-                     {isGenerating ? 'Building Baseline...' : 'Generate Baseline Test'}
-                  </button>
-               </div>
-            </div>
-         </div>
-      )}
-
-      {/* --- DELETE CONFIRMATION MODAL --- */}
-      {deleteItem && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-gray-100 text-center space-y-4" onClick={e => e.stopPropagation()}>
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-500 mb-2">
-                 <Trash2 className="w-8 h-8"/>
-              </div>
-              <div>
-                 <h3 className="text-xl font-bold text-gray-900">Delete Item?</h3>
-                 <p className="text-sm text-gray-500 mt-1">
-                    Are you sure you want to delete <span className="font-bold text-gray-800">{deleteItem.title}</span>?
-                 </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                 <button onClick={() => setDeleteItem(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition">Cancel</button>
-                 <button onClick={() => {
-                    if (deleteItem.type === 'plan') deletePlan(deleteItem.id);
-                    else deleteTest(deleteItem.id);
-                    setDeleteItem(null);
-                 }} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 shadow-lg shadow-red-200 transition">Delete</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-    </div>
-  );
-};
+               <div className="p-

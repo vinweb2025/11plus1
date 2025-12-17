@@ -1654,7 +1654,7 @@ export const ChildDashboard = ({ previewStudentId }: ChildDashboardProps) => {
       
       {/* Footer */}
       <div className="absolute bottom-4 text-center w-full text-xs font-bold text-blue-900/30">
-         © 2024 11+ Gen67
+         © 2024 11+ Yodha
       </div>
     </div>
   );

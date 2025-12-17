@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { UserRole } from '../types';
@@ -27,7 +28,7 @@ export const Layout = ({ children }: React.PropsWithChildren<{}>) => {
           <div className="bg-kid-primary/10 p-1.5 rounded-lg">
             <GraduationCap className="w-6 h-6 text-kid-primary" />
           </div>
-          11+ Gen67
+          11+ Yodha
         </div>
         <button onClick={toggleSidebar} className="p-2 text-gray-600 hover:bg-gray-100 hover:text-kid-primary rounded-xl transition-colors">
           {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -53,7 +54,7 @@ export const Layout = ({ children }: React.PropsWithChildren<{}>) => {
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-2 rounded-xl shadow-lg shadow-blue-200">
                <GraduationCap className="w-6 h-6" />
             </div>
-            11+ Gen67
+            11+ Yodha
           </h1>
           <div className="mt-4 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 inline-block">
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1">

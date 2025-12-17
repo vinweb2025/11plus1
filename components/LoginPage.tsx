@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { UserRole, Gender } from '../types';
@@ -87,7 +88,7 @@ export const LoginPage = () => {
               <GraduationCap className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-3xl font-display font-extrabold text-gray-900 tracking-tight">
-              11+ Gen67
+              11+ Yodha
             </h1>
             <p className="text-gray-500 font-medium mt-2">
               {mode === 'login' ? 'Welcome back! Ready to learn?' : 'Start your learning journey today.'}
@@ -254,7 +255,7 @@ export const LoginPage = () => {
       
       {/* Footer */}
       <div className="absolute bottom-4 text-center w-full text-xs font-bold text-blue-900/30">
-         © 2024 11+ Gen67
+         © 2024 11+ Yodha
       </div>
     </div>
   );
