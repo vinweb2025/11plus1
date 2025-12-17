@@ -694,16 +694,18 @@ export const ChildDashboard = ({ previewStudentId }: ChildDashboardProps) => {
     return (
       <div className="fixed inset-0 z-[200] bg-[#0f172a] text-white flex flex-col h-screen w-screen overflow-hidden font-sans">
          {/* Background with radial gradient to mimic studio lighting */}
-         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black opacity-100 pointer-events-none"></div>
+         <div className="absolute inset-0 bg-slate-900 pointer-events-none">
+            <div className="absolute inset-0 opacity-30 bg-gradient-to-br from-slate-800 via-slate-900 to-black"></div>
+         </div>
          
          {/* Grid overlay */}
-         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:50px_50px] pointer-events-none"></div>
+         <div className="absolute inset-0 opacity-5" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
 
          {/* Content Container */}
-         <div className="relative z-10 flex flex-col h-full max-w-5xl mx-auto w-full p-6">
+         <div className="relative z-10 flex flex-col h-full max-w-5xl mx-auto w-full">
             
             {/* Header / Timer */}
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center p-6 shrink-0">
                <button onClick={closeTest} className="p-2 rounded-full bg-slate-800 border border-slate-600 hover:border-white transition"><X className="w-6 h-6"/></button>
                <div className={`text-2xl font-mono font-bold tracking-widest ${timeRemaining < 60 ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>
                   {formatTime(timeRemaining)}
@@ -713,81 +715,107 @@ export const ChildDashboard = ({ previewStudentId }: ChildDashboardProps) => {
                </div>
             </div>
 
-            {/* Question Box - Hexagon-ish shape using borders/CSS */}
-            <div className="flex-1 flex flex-col justify-center items-center mb-8 relative">
-               <div className="relative w-full max-w-4xl">
-                  {/* Decorative Lines connecting to answers */}
-                  <div className="absolute top-full left-1/4 w-0.5 h-16 bg-cyan-600/50 hidden md:block"></div>
-                  <div className="absolute top-full right-1/4 w-0.5 h-16 bg-cyan-600/50 hidden md:block"></div>
-                  
-                  {/* The Box */}
-                  <div className="relative bg-slate-900/90 border-2 border-cyan-500 rounded-3xl p-8 md:p-12 text-center shadow-[0_0_30px_rgba(6,182,212,0.3)] backdrop-blur-md">
-                     {/* Corner Accents */}
-                     <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-cyan-400 rounded-tl-xl"></div>
-                     <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-cyan-400 rounded-tr-xl"></div>
-                     <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-cyan-400 rounded-bl-xl"></div>
-                     <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-cyan-400 rounded-br-xl"></div>
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto px-6 pb-40">
+                {/* Question Box - Hexagon-ish shape using borders/CSS */}
+                <div className="flex flex-col justify-center items-center mb-8 relative">
+                   <div className="relative w-full max-w-4xl">
+                      {/* Decorative Lines connecting to answers */}
+                      <div className="absolute top-full left-1/4 w-0.5 h-16 bg-cyan-600/50 hidden md:block"></div>
+                      <div className="absolute top-full right-1/4 w-0.5 h-16 bg-cyan-600/50 hidden md:block"></div>
+                      
+                      {/* The Box */}
+                      <div className="relative bg-slate-900/90 border-2 border-cyan-500 rounded-3xl p-8 md:p-12 text-center shadow-lg backdrop-blur-md">
+                         {/* Corner Accents */}
+                         <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-cyan-400 rounded-tl-xl"></div>
+                         <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-cyan-400 rounded-tr-xl"></div>
+                         <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-cyan-400 rounded-bl-xl"></div>
+                         <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-cyan-400 rounded-br-xl"></div>
 
-                     <h2 className="text-2xl md:text-4xl font-display font-bold leading-relaxed text-white drop-shadow-lg">
-                        {question.text}
-                     </h2>
-                  </div>
-               </div>
+                         <h2 className="text-2xl md:text-4xl font-display font-bold leading-relaxed text-white drop-shadow-lg">
+                            {question.text}
+                         </h2>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Answers Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8 md:px-12">
+                   {question.options.map((opt, idx) => {
+                      const isSelected = selectedAnswer === idx;
+                      const isThisCorrect = idx === question.correctAnswerIndex;
+                      const label = String.fromCharCode(65 + idx); // A, B, C, D
+
+                      let borderColor = 'border-cyan-700';
+                      let bgColor = 'bg-slate-900';
+                      let shadowClass = 'hover:border-cyan-400';
+                      
+                      if (isAnswered) {
+                         shadowClass = '';
+                         if (isThisCorrect) {
+                            borderColor = 'border-green-500';
+                            bgColor = 'bg-green-900/60';
+                         } else if (isSelected) {
+                            borderColor = 'border-red-500';
+                            bgColor = 'bg-red-900/60';
+                         } else {
+                            borderColor = 'border-slate-700';
+                            bgColor = 'bg-slate-900 opacity-50';
+                         }
+                      } else if (isSelected) {
+                         borderColor = 'border-orange-400';
+                         bgColor = 'bg-slate-800';
+                      }
+
+                      return (
+                         <button
+                            key={idx}
+                            onClick={() => !isAnswered && handleAnswer(idx)}
+                            disabled={isAnswered}
+                            className="relative group w-full"
+                         >
+                            <div className={`
+                               flex items-center w-full p-4 md:p-6 rounded-full border-2 transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden
+                               ${borderColor} ${bgColor} ${shadowClass}
+                            `}>
+                               {/* Letter Badge */}
+                               <span className="text-orange-400 font-bold text-xl md:text-2xl mr-4 font-mono">{label}:</span>
+                               <span className="text-white font-bold text-lg md:text-xl text-left flex-1">{opt}</span>
+                            </div>
+                         </button>
+                      )
+                   })}
+                </div>
+
+                {/* Feedback Section (Scrollable) */}
+                {isAnswered && (
+                   <div className="flex flex-col items-center justify-center z-20 relative space-y-4 mb-8">
+                      <div className="text-center animate-in slide-in-from-bottom-2 max-w-3xl px-4 w-full">
+                          <div className={`text-2xl md:text-3xl font-black uppercase tracking-widest mb-2 ${isCorrect ? 'text-green-400 drop-shadow-md' : 'text-red-500 drop-shadow-md'}`}>
+                              {isCorrect ? "Correct!" : "Incorrect"}
+                          </div>
+                          <div className="text-lg md:text-xl text-slate-300 font-medium mb-6">
+                              The correct answer is: <span className="text-cyan-300 font-bold ml-1">{question.options[question.correctAnswerIndex]}</span>
+                          </div>
+                          
+                          {question.explanation && (
+                            <div className="bg-slate-800/80 border border-slate-600 p-6 rounded-2xl backdrop-blur-sm shadow-xl text-left mx-auto w-full">
+                               <p className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                  <Lightbulb className="w-4 h-4"/> Why is this correct?
+                               </p>
+                               <p className="text-slate-200 text-sm md:text-base leading-relaxed font-medium">
+                                  {question.explanation}
+                               </p>
+                            </div>
+                          )}
+                      </div>
+                   </div>
+                )}
             </div>
 
-            {/* Answers Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-8 md:px-12">
-               {question.options.map((opt, idx) => {
-                  const isSelected = selectedAnswer === idx;
-                  const isThisCorrect = idx === question.correctAnswerIndex;
-                  const label = String.fromCharCode(65 + idx); // A, B, C, D
-
-                  let borderColor = 'border-cyan-700';
-                  let bgColor = 'bg-slate-900';
-                  let shadowClass = 'hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] hover:border-cyan-400';
-                  
-                  if (isAnswered) {
-                     shadowClass = '';
-                     if (isThisCorrect) {
-                        borderColor = 'border-green-500';
-                        bgColor = 'bg-green-900/60';
-                        shadowClass = 'shadow-[0_0_20px_rgba(34,197,94,0.6)]';
-                     } else if (isSelected) {
-                        borderColor = 'border-red-500';
-                        bgColor = 'bg-red-900/60';
-                     } else {
-                        borderColor = 'border-slate-700';
-                        bgColor = 'bg-slate-900 opacity-50';
-                     }
-                  } else if (isSelected) {
-                     borderColor = 'border-orange-400';
-                     bgColor = 'bg-slate-800';
-                     shadowClass = 'shadow-[0_0_15px_rgba(251,146,60,0.5)]';
-                  }
-
-                  return (
-                     <button
-                        key={idx}
-                        onClick={() => !isAnswered && handleAnswer(idx)}
-                        disabled={isAnswered}
-                        className="relative group w-full"
-                     >
-                        <div className={`
-                           flex items-center w-full p-4 md:p-6 rounded-full border-2 transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden
-                           ${borderColor} ${bgColor} ${shadowClass}
-                        `}>
-                           {/* Letter Badge */}
-                           <span className="text-orange-400 font-bold text-xl md:text-2xl mr-4 font-mono">{label}:</span>
-                           <span className="text-white font-bold text-lg md:text-xl text-left flex-1">{opt}</span>
-                        </div>
-                     </button>
-                  )
-               })}
-            </div>
-
-            {/* Footer / Controls */}
+            {/* Fixed Footer Control - Always Visible */}
             {isAnswered && (
-               <div className="flex justify-center pb-6">
+               <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-[#0f172a] via-[#0f172a] to-transparent z-50 flex justify-center">
                   <button 
                      onClick={nextQuestion} 
                      className="px-12 py-4 rounded-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-black text-xl uppercase tracking-widest shadow-lg hover:scale-105 transition-transform"
