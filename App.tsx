@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
 import { Layout } from './components/Layout';
@@ -13,12 +14,11 @@ const AppContent = () => {
   const { currentUser, viewRole, isLoading } = useApp();
 
   // 1. Show Global Loader while App is Initializing (Checking Session)
-  // This prevents race conditions where a user tries to login while session check is in progress
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
         <Loader2 className="w-12 h-12 text-indigo-600 animate-spin mb-4" />
-        <p className="text-gray-500 font-medium animate-pulse">Loading 11+ Gen67...</p>
+        <p className="text-gray-500 font-medium animate-pulse">Loading 11+ Yodha...</p>
       </div>
     );
   }
@@ -32,8 +32,7 @@ const AppContent = () => {
     );
   }
 
-  // 3. If authenticated, route to the correct Dashboard based on Role
-  // Priority: Use 'viewRole' if set (for Admins viewing others), otherwise currentUser.role
+  // 3. Route to the correct Dashboard based on Role
   const currentRole = viewRole || currentUser.role;
 
   let Content: React.ReactNode;

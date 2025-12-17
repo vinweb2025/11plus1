@@ -10,12 +10,10 @@ import {
 export const LoginPage = () => {
   const { login, signup, seedDatabase, subjects, dbError } = useApp();
 
-  // --- STATE ---
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // Default role for signup is Parent, user can change it in the signup form
   const [signupRole, setSignupRole] = useState<UserRole>(UserRole.PARENT);
   const [signupGender, setSignupGender] = useState<Gender>(Gender.BOY);
   
@@ -24,7 +22,6 @@ export const LoginPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // --- HANDLERS ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -35,17 +32,10 @@ export const LoginPage = () => {
       if (mode === 'login') {
          const err = await login(email, password);
          if (err) {
-           if (err.includes('Email not confirmed')) {
-             setError("Please verify your email address before logging in.");
-           } else if (err.includes('Invalid login credentials')) {
-             setError("Incorrect email or password.");
-           } else {
-             setError(err);
-           }
+           setError(err);
          }
       } else {
          if (!name) { setError("Name is required"); setIsLoading(false); return; }
-         // Only pass gender if role is STUDENT
          const genderToPass = signupRole === UserRole.STUDENT ? signupGender : undefined;
          const err = await signup(email, password, name, signupRole, genderToPass);
          if (err) setError(err);
@@ -71,18 +61,15 @@ export const LoginPage = () => {
   return (
     <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden font-sans bg-gradient-to-br from-blue-100 via-white to-orange-50">
       
-      {/* Animated Background Shapes */}
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-blue-300/20 rounded-full blur-3xl animate-pulse"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-orange-300/20 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
       
       <div className="bg-white/80 backdrop-blur-xl rounded-[2.5rem] shadow-2xl border border-white/50 w-full max-w-md relative z-10 overflow-hidden">
         
-        {/* Decorative Top Bar */}
         <div className="h-2 bg-gradient-to-r from-blue-500 via-cyan-500 to-blue-500 w-full"></div>
 
         <div className="p-8 md:p-10">
           
-          {/* Header Section */}
           <div className="text-center mb-8">
             <div className="inline-flex p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg shadow-blue-200 mb-4">
               <GraduationCap className="w-8 h-8 text-white" />
@@ -95,20 +82,18 @@ export const LoginPage = () => {
             </p>
           </div>
 
-          {/* Database Error Banner */}
           {dbError && (
             <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 text-red-700 animate-in fade-in">
               <Database className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-bold text-sm">Setup Required</h4>
-                <p className="text-xs mt-1">Please run the SQL setup script in Supabase.</p>
+                <h4 className="font-bold text-sm">Database Sync Issue</h4>
+                <p className="text-xs mt-1">Some features may be limited. If you are an admin, check the SQL setup.</p>
               </div>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             
-            {/* Feedback Messages */}
             {error && (
               <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold flex items-center gap-3 border border-red-100 animate-in slide-in-from-top-2">
                 <AlertCircle className="w-5 h-5 shrink-0" />
@@ -122,7 +107,6 @@ export const LoginPage = () => {
               </div>
             )}
 
-            {/* Signup: Name Field */}
             {mode === 'signup' && (
               <div className="space-y-1 animate-in fade-in slide-in-from-left-4 duration-300">
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Full Name</label>
@@ -139,7 +123,6 @@ export const LoginPage = () => {
               </div>
             )}
 
-            {/* Email Field */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Email</label>
               <div className="relative group">
@@ -155,7 +138,6 @@ export const LoginPage = () => {
               </div>
             </div>
             
-            {/* Password Field */}
             <div className="space-y-1">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">Password</label>
               <div className="relative group">
@@ -178,7 +160,6 @@ export const LoginPage = () => {
               </div>
             </div>
 
-            {/* Signup: Role Selection */}
             {mode === 'signup' && (
                <div className="space-y-3 animate-in fade-in slide-in-from-left-4 duration-300">
                   <div className="space-y-1">
@@ -217,7 +198,6 @@ export const LoginPage = () => {
                </div>
             )}
 
-            {/* Submit Button */}
             <button 
               type="submit" 
               disabled={isLoading}
@@ -228,7 +208,6 @@ export const LoginPage = () => {
             </button>
           </form>
 
-          {/* Toggle Mode */}
           <div className="mt-8 text-center">
             <p className="text-gray-500 text-sm font-medium">
               {mode === 'login' ? "Don't have an account?" : "Already have an account?"}
@@ -241,7 +220,6 @@ export const LoginPage = () => {
             </p>
           </div>
 
-          {/* Developer Tool: Seed Database (Hidden unless DB is empty and connected) */}
           {subjects.length === 0 && !dbError && (
              <div className="mt-8 pt-6 border-t border-gray-100 text-center">
                 <button onClick={handleSeed} disabled={isLoading} className="text-xs font-bold text-gray-400 hover:text-blue-500 transition flex items-center justify-center gap-1 mx-auto">
@@ -253,7 +231,6 @@ export const LoginPage = () => {
         </div>
       </div>
       
-      {/* Footer */}
       <div className="absolute bottom-4 text-center w-full text-xs font-bold text-blue-900/30">
          © 2024 11+ Yodha
       </div>

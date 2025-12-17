@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { generateTestQuestions, generateRoadmapSuggestion } from '../services/geminiService';
@@ -55,7 +56,6 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
   const [adminSelectedParentId, setAdminSelectedParentId] = useState<string>('');
 
   // Determine Effective Parent / Supervisor (Teacher)
-  // If viewingAsId is provided (from TeacherDashboard), use it.
   const effectiveParentId = viewingAsId || (isAdmin ? adminSelectedParentId : currentUser?.id);
   const effectiveParent = users.find(u => u.id === effectiveParentId) || (!isAdmin ? currentUser : null);
 
@@ -162,27 +162,22 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
   const selectedDayPlans = selectedStudentPlans.filter(p => p.date === selectedDate.toISOString().split('T')[0]);
   const selectedDayTests = selectedStudentTests.filter(t => t.assignedDate === selectedDate.toISOString().split('T')[0]);
 
-  const baselineTest = selectedStudentTests.find(t => t.type === TestType.BASELINE);
-
   const pendingPlans = selectedDayPlans.filter(p => !p.completed);
   const completedPlans = selectedDayPlans.filter(p => p.completed);
 
   const pendingTests = selectedDayTests.filter(t => !t.completed);
   const completedTests = selectedDayTests.filter(t => t.completed);
 
-  // Define availableRewards (Fix for missing variable)
   const availableRewards = useMemo(() => {
     return rewards.filter(r => !r.parentId || r.parentId === effectiveParentId);
   }, [rewards, effectiveParentId]);
 
-  // Toggle helpers for Test Topics
   const availableTestTopics = topics.filter(t => t.subjectId === testSubjectId);
   
   const toggleTestTopic = (tId: string) => {
     setTestTopicIds(prev => 
       prev.includes(tId) ? prev.filter(id => id !== tId) : [...prev, tId]
     );
-    setTestSubTopicIds([]); 
   };
 
   const toggleSelectAllTopics = () => {
@@ -191,7 +186,6 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
     } else {
       setTestTopicIds(availableTestTopics.map(t => t.id));
     }
-    setTestSubTopicIds([]);
   };
 
   const toggleMockSubject = (sId: string) => {
@@ -279,10 +273,7 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
   };
 
   const handleAssignStudy = async () => {
-    if (!studySubjectId) { alert("Please select a subject."); return; }
-    if (!studyTopicId) { alert("Please select a topic."); return; }
-    if (!selectedStudentId) { alert("Please select a student."); return; }
-
+    if (!studySubjectId || !studyTopicId || !selectedStudentId) return;
     try {
       await addPlan({
         id: generateUUID(),
@@ -300,8 +291,7 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
       setModalMode('none');
       setStudyNotes('');
     } catch (e) {
-      console.error("Assign Study Error:", e);
-      alert("Failed to assign study plan. Check console for details.");
+      alert("Failed to assign study plan.");
     }
   };
 
@@ -313,64 +303,26 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
     const selectedTopics = topics.filter(t => testTopicIds.includes(t.id));
     const topicNames = selectedTopics.map(t => t.name);
     
-    let subTopicNames: string[] = [];
-    if (testTopicIds.length === 1 && testSubTopicIds.length > 0) {
-       const topic = selectedTopics[0];
-       subTopicNames = topic.subTopics.filter(st => testSubTopicIds.includes(st.id)).map(st => st.name);
-    }
-
     try {
       let questions: any[] = [];
-
       if (testSource === 'AI') {
-         questions = await generateTestQuestions(
-            subject?.name || '',
-            topicNames,
-            subTopicNames,
-            testDifficulty,
-            testQuestionCount,
-            false,
-            aiGlobalBehavior
-         );
+         questions = await generateTestQuestions(subject?.name || '', topicNames, [], testDifficulty, testQuestionCount, false, aiGlobalBehavior);
       } else {
-         // Question Bank Logic
-         const bankQuestions = questionBank.filter(q => 
-            (testTopicIds.includes(q.topicId)) && 
-            (testDifficulty === DifficultyLevel.MIXED || q.difficulty === testDifficulty)
-         );
-         
-         if (bankQuestions.length < testQuestionCount) {
-            alert(`Only found ${bankQuestions.length} questions in Bank matching criteria. Using all of them.`);
-            questions = bankQuestions;
-         } else {
-            // Random Shuffle
-            questions = bankQuestions.sort(() => 0.5 - Math.random()).slice(0, testQuestionCount);
-         }
-         
+         const bankQuestions = questionBank.filter(q => (testTopicIds.includes(q.topicId)) && (testDifficulty === DifficultyLevel.MIXED || q.difficulty === testDifficulty));
+         questions = bankQuestions.sort(() => 0.5 - Math.random()).slice(0, testQuestionCount);
          if (questions.length === 0) {
-            alert("No questions found in Bank for these topics/difficulty.");
+            alert("No questions found in Bank.");
             setIsGenerating(false);
             return;
          }
       }
 
-      let title = "";
-      if (testTopicIds.length === 1) {
-         title = `${selectedTopics[0].name} Quiz`;
-      } else if (testTopicIds.length === availableTestTopics.length) {
-         title = `${subject?.name} Full Assessment`;
-      } else {
-         title = `${subject?.name} Mixed Quiz`;
-      }
-
       await addTest({
         id: generateUUID(),
         type: TestType.NORMAL,
-        title: title,
+        title: testTopicIds.length === 1 ? `${selectedTopics[0].name} Quiz` : `${subject?.name} Mixed Quiz`,
         subjectId: testSubjectId,
-        topicId: testTopicIds.length === 1 ? testTopicIds[0] : undefined,
         topicIds: testTopicIds,
-        subTopicIds: testSubTopicIds,
         questions: questions || [],
         createdBy: effectiveParentId || 'unknown',
         assignedTo: selectedStudentId,
@@ -381,81 +333,51 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
       });
       setModalMode('none');
     } catch (e: any) {
-      console.error("Assign Test Error:", e);
-      alert(`Failed to generate test. Error: ${e.message || JSON.stringify(e)}`);
+      alert(`Failed to generate test: ${e.message}`);
     } finally {
       setIsGenerating(false);
     }
   };
 
   const handleAssignMock = async () => {
-    if (mockSubjectIds.length === 0) { alert("Please select at least one subject."); return; }
-    if (!selectedStudentId) { alert("Please select a student."); return; }
-    
+    if (mockSubjectIds.length === 0 || !selectedStudentId) return;
     setIsGenerating(true);
-
-    const selectedSubjects = subjects.filter(s => mockSubjectIds.includes(s.id));
-    const subjectNames = selectedSubjects.map(s => s.name);
-
+    const subjectNames = subjects.filter(s => mockSubjectIds.includes(s.id)).map(s => s.name);
     try {
-      const questions = await generateTestQuestions(
-        subjectNames,
-        null,
-        [],
-        mockDifficulty,
-        mockQuestionCount,
-        false,
-        aiGlobalBehavior
-      );
-
+      const questions = await generateTestQuestions(subjectNames, null, [], mockDifficulty, mockQuestionCount, false, aiGlobalBehavior);
       await addTest({
         id: generateUUID(),
         type: TestType.MOCK,
         title: "Full Mock Exam",
-        subjectId: mockSubjectIds[0], // Primary subject for reference
+        subjectId: mockSubjectIds[0],
         subjectIds: mockSubjectIds,
         questions: questions || [],
         createdBy: effectiveParentId || 'unknown',
         assignedTo: selectedStudentId,
         assignedDate: selectedDate.toISOString().split('T')[0],
-        duration: 60, // Standard 1 hour for mock
+        duration: 60,
         status: TaskStatus.NOT_STARTED,
         completed: false
       });
       setModalMode('none');
     } catch (e: any) {
-      console.error("Assign Mock Error:", e);
-      alert(`Failed to create mock exam. Error: ${e.message || JSON.stringify(e)}`);
+      alert("Failed to create mock exam.");
     } finally {
       setIsGenerating(false);
     }
   };
 
   const handleCreateBaseline = async () => {
-    if (baselineSubjectIds.length === 0) { alert("Please select subjects to cover."); return; }
-    if (!selectedStudentId) { alert("Please select a student."); return; }
-    
+    if (baselineSubjectIds.length === 0 || !selectedStudentId) return;
     setIsGenerating(true);
-    
-    const selectedSubjects = subjects.filter(s => baselineSubjectIds.includes(s.id));
-    const subjectNames = selectedSubjects.map(s => s.name);
-
+    const subjectNames = subjects.filter(s => baselineSubjectIds.includes(s.id)).map(s => s.name);
     try {
-      const questions = await generateTestQuestions(
-        subjectNames,
-        null,
-        [],
-        baselineDifficulty,
-        baselineQuestionCount,
-        true, // isBaseline flag
-        aiGlobalBehavior
-      );
-      
+      const questions = await generateTestQuestions(subjectNames, null, [], baselineDifficulty, baselineQuestionCount, true, aiGlobalBehavior);
       await addTest({
         id: generateUUID(),
         type: TestType.BASELINE,
         title: `Comprehensive Baseline Assessment`,
-        subjectId: baselineSubjectIds[0], // Primary for indexing
+        subjectId: baselineSubjectIds[0],
         subjectIds: baselineSubjectIds,
         questions: questions || [],
         createdBy: effectiveParentId || 'unknown',
@@ -467,8 +389,7 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
       });
       setModalMode('none');
     } catch(e: any) {
-      console.error("Baseline Error:", e);
-      alert(`Failed to assign baseline test. Error: ${e.message || JSON.stringify(e)}`);
+      alert("Failed to assign baseline test.");
     } finally {
       setIsGenerating(false);
     }
@@ -476,23 +397,19 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
 
   const handleCreateReward = async () => {
     if(!rewardForm.name || !rewardForm.cost) return;
-    try {
-        await addReward({
-          id: `r-cust-${Date.now()}`,
-          name: rewardForm.name,
-          cost: Number(rewardForm.cost),
-          icon: rewardForm.icon || 'Gift',
-          color: rewardForm.color || 'bg-blue-500',
-          type: 'real',
-          description: rewardForm.description || 'Custom Reward',
-          parentId: effectiveParentId,
-          approvalRequired: rewardForm.approvalRequired,
-          weeklyLimit: rewardForm.weeklyLimit
-        });
-        setRewardForm({ name: '', cost: 100, icon: 'Gift', color: 'bg-blue-500', type: 'real', approvalRequired: true });
-    } catch(e) {
-        console.error("Failed to create reward", e);
-    }
+    await addReward({
+      id: `r-cust-${Date.now()}`,
+      name: rewardForm.name,
+      cost: Number(rewardForm.cost),
+      icon: rewardForm.icon || 'Gift',
+      color: rewardForm.color || 'bg-blue-500',
+      type: 'real',
+      description: rewardForm.description || 'Custom Reward',
+      parentId: effectiveParentId,
+      approvalRequired: rewardForm.approvalRequired,
+      weeklyLimit: rewardForm.weeklyLimit
+    });
+    setRewardForm({ name: '', cost: 100, icon: 'Gift', color: 'bg-blue-500', type: 'real', approvalRequired: true });
   };
 
   const handleManualPoints = () => {
@@ -502,7 +419,6 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
     }
   };
 
-  // --- RENDER HELPERS ---
   const renderCalendarDays = () => {
     const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
     const firstDay = getFirstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
@@ -518,11 +434,7 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
       if (isSelected) statusClass = "bg-blue-600 text-white border-blue-600 shadow-md transform scale-105 z-10";
       else if (hasActivity) {
         const allCompleted = [...dayPlans, ...dayTests].every(t => t.completed);
-        const someCompleted = [...dayPlans, ...dayTests].some(t => t.completed);
-        const isPast = new Date(dateStr) < new Date(new Date().setHours(0,0,0,0));
         if (allCompleted) statusClass = "bg-green-50 border-green-200";
-        else if (isPast && !allCompleted) statusClass = "bg-red-50 border-red-200";
-        else if (someCompleted) statusClass = "bg-orange-50 border-orange-200";
         else statusClass = "bg-blue-50 border-blue-200";
       }
       days.push(
@@ -538,155 +450,43 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
     return days;
   };
 
-  const LessonReaderOverlay = ({ topicName, subTopics, onClose }: { topicName: string, subTopics: SubTopic[], onClose: () => void }) => {
-     return (
-        <div className="fixed inset-0 z-[70] bg-gray-900/95 flex flex-col animate-in fade-in duration-300 backdrop-blur-sm">
-           <div className="flex items-center justify-between p-6 text-white border-b border-white/10">
-              <div className="flex items-center gap-4"><div className="bg-blue-600 p-2 rounded-lg"><BookOpen className="w-6 h-6"/></div><div><h3 className="font-bold text-lg">{topicName}</h3><p className="text-sm text-white/60">Quick Lesson Review</p></div></div>
-              <button onClick={onClose} className="p-2 bg-white/20 hover:bg-white/30 text-white rounded-full transition"><X className="w-6 h-6"/></button>
-           </div>
-           <div className="flex-1 overflow-y-auto p-6 md:p-12"><div className="max-w-3xl mx-auto space-y-12">{subTopics.map((sub, idx) => (
-              <div key={sub.id} className="bg-white rounded-3xl p-8 shadow-xl">
-                 <h2 className="text-3xl font-display font-bold text-gray-900 mb-6 flex items-center gap-3"><span className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-sm">{idx + 1}</span> {sub.name}</h2>
-                 <div className="space-y-6">
-                    <div className="text-lg leading-relaxed text-gray-700">{sub.explanation}</div>
-                    <div className="bg-yellow-50 border border-yellow-100 p-6 rounded-2xl relative"><h4 className="font-bold text-yellow-800 flex items-center gap-2 mb-2"><Target className="w-5 h-5"/> Learning Goal</h4><p className="text-yellow-900">{sub.learningObjective}</p></div>
-                    <div className="bg-sky-50 border border-sky-100 p-6 rounded-2xl"><h4 className="font-bold text-sky-800 flex items-center gap-2 mb-4"><Lightbulb className="w-5 h-5"/> Examples</h4><div className="space-y-2">{sub.exampleQuestions.map((ex, i) => (<div key={i} className="bg-white p-3 rounded-lg text-gray-700 shadow-sm">{ex}</div>))}</div></div>
-                 </div>
-              </div>
-           ))}</div></div>
-        </div>
-     )
-  }
-
   if (viewAsStudent) {
-    const studentName = myStudents.find(s => s.id === selectedStudentId)?.name || 'Student';
     return (
       <div className="fixed inset-0 z-[100] bg-gray-50 flex flex-col h-screen w-screen">
          <div className="bg-blue-600 text-white p-4 flex justify-between items-center shadow-md shrink-0">
-             <div className="flex items-center gap-3"><div className="bg-white/20 p-2 rounded-full"><Eye className="w-5 h-5" /></div><div><span className="font-bold block text-lg">Viewing as {studentName}</span><span className="text-xs text-blue-200 uppercase tracking-wide font-bold">Preview Mode</span></div></div>
+             <div className="flex items-center gap-3"><div className="bg-white/20 p-2 rounded-full"><Eye className="w-5 h-5" /></div><div><span className="font-bold block text-lg">Viewing as {selectedStudent?.name}</span></div></div>
              <button onClick={() => setViewAsStudent(false)} className="bg-white text-blue-600 hover:bg-blue-50 px-6 py-2 rounded-xl font-bold text-sm transition shadow-sm">Exit Student View</button>
          </div>
          <div className="flex-1 overflow-hidden"><div className="h-full overflow-y-auto p-4 md:p-8"><ChildDashboard previewStudentId={selectedStudentId} /></div></div>
       </div>
-    )
+    );
   }
-  
-  if (myStudents.length === 0) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-6">
-         {/* Admin Selector when empty - Hide if viewing as specific context (Teacher) */}
-         {isAdmin && !viewingAsId && (
-            <div className="w-full max-w-md mb-8 p-6 bg-white rounded-3xl shadow-xl border border-blue-100">
-               <label className="block text-sm font-bold text-gray-500 mb-2 uppercase tracking-wide">Select Parent Account to View</label>
-               <select 
-                  value={adminSelectedParentId} 
-                  onChange={(e) => setAdminSelectedParentId(e.target.value)}
-                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl font-bold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
-               >
-                  <option value="">-- Select a Parent --</option>
-                  {allParents.map(p => <option key={p.id} value={p.id}>{p.name} ({p.email})</option>)}
-               </select>
-               <p className="text-xs text-blue-500 mt-2 font-medium">Select a parent to see their dashboard and students.</p>
-            </div>
-         )}
-
-         <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center"><Users className="w-12 h-12 text-gray-400" /></div>
-         <div className="max-w-md"><h2 className="text-2xl font-bold text-gray-800 mb-2">No Students Linked</h2>
-         <p className="text-gray-500 mb-6">
-            {isAdmin && !viewingAsId ? (adminSelectedParentId ? "The selected parent has no students linked." : "Please select a parent above.") : "You need to have students linked to your account to plan schedules and tests."}
-         </p>
-         {!isAdmin && !viewingAsId && <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700"><strong>Admin Tip:</strong> Ask admin to link your child's account.</div>}
-         </div>
-      </div>
-    )
-  }
-
-  const isTeacher = currentUser?.role === UserRole.TEACHER;
-  const dashboardTitle = isTeacher || viewingAsId ? "Student Overview" : "Parent Dashboard";
-  const dashboardSubtitle = (isTeacher || viewingAsId) ? "Detailed progress and planning for " + (selectedStudent?.name || "") : "Plan, assign, and track progress.";
 
   return (
     <div className="space-y-8 pb-20">
-      {readingLessonTopicId && (
-         <LessonReaderOverlay 
-           topicName={topics.find(t => t.id === readingLessonTopicId)?.name || 'Lesson'}
-           subTopics={topics.find(t => t.id === readingLessonTopicId)?.subTopics || []}
-           onClose={() => setReadingLessonTopicId(null)}
-         />
-      )}
-
-      {/* Admin Impersonation Banner - Hide if viewingAsId is set (Teacher Context) */}
-      {isAdmin && !viewingAsId && effectiveParent && (
-         <div className="bg-gray-900 text-white p-3 rounded-xl flex items-center justify-between shadow-lg mb-4 animate-in slide-in-from-top-2">
-            <div className="flex items-center gap-3">
-               <div className="bg-white/20 p-1.5 rounded-lg"><User className="w-4 h-4 text-white"/></div>
-               <span className="text-sm font-bold">Viewing as Parent: <span className="text-blue-300">{effectiveParent.name}</span></span>
-            </div>
-            <select 
-               value={adminSelectedParentId}
-               onChange={(e) => setAdminSelectedParentId(e.target.value)}
-               className="bg-gray-800 text-white text-xs font-bold py-1.5 px-3 rounded-lg border border-gray-700 outline-none focus:ring-1 focus:ring-blue-500"
-            >
-               {allParents.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-         </div>
-      )}
-
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end border-b border-gray-200 pb-6 gap-4">
         <div>
-           <h2 className="text-3xl font-display font-bold text-gray-900">{dashboardTitle}</h2>
-           <p className="text-gray-500 mt-1">{dashboardSubtitle}</p>
+           <h2 className="text-3xl font-display font-bold text-gray-900">{viewingAsId ? "Student Overview" : "Parent Dashboard"}</h2>
+           <p className="text-gray-500 mt-1">Manage progress for {selectedStudent?.name}</p>
         </div>
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-          <button 
-            onClick={() => setModalMode('rewards')} 
-            className={`w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition shadow-sm bg-yellow-50 border border-yellow-200 text-yellow-700 hover:bg-yellow-100`}
-          >
+          <button onClick={() => setModalMode('rewards')} className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition shadow-sm bg-yellow-50 border border-yellow-200 text-yellow-700 hover:bg-yellow-100">
             <ShoppingBag className="w-5 h-5"/> Manage Rewards
           </button>
-          
-          <button 
-            onClick={() => setViewAsStudent(true)} 
-            disabled={isInactive}
-            className={`w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition shadow-sm ${isInactive ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-blue-600'}`}
-          >
+          <button onClick={() => setViewAsStudent(true)} disabled={isInactive} className="w-full sm:w-auto flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition shadow-sm bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-blue-600 disabled:opacity-50">
             <Eye className="w-5 h-5" /> View as Student
           </button>
-          
           <div className="flex items-center gap-4 bg-white p-2 rounded-2xl shadow-sm border border-gray-100 w-full sm:w-auto">
-            <label className="text-sm font-bold text-gray-500 pl-2 shrink-0">{isTeacher || viewingAsId ? 'Student:' : 'Child:'}</label>
             <select value={selectedStudentId} onChange={(e) => setSelectedStudentId(e.target.value)} className="bg-gray-50 border border-gray-200 text-gray-800 text-sm rounded-xl focus:ring-blue-500 focus:border-blue-500 block p-2.5 font-bold outline-none flex-1">
-              {myStudents.map(s => (
-                <option key={s.id} value={s.id}>
-                    {s.name} {s.gender ? `(${s.gender.charAt(0)})` : ''}
-                </option>
-              ))}
+              {myStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
         </div>
       </header>
 
-      {/* INACTIVE STUDENT BANNER */}
-      {isInactive && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm animate-in fade-in slide-in-from-top-2">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-red-800 font-bold text-lg">Student Account Inactive</h3>
-              <p className="text-red-700 text-sm mt-1 leading-relaxed">
-                {selectedStudent?.name}'s account has been deactivated. You can still view past history and reports, but you cannot assign new tasks, create tests, or manage rewards until the account is reactivated. 
-                Please contact an Administrator for assistance.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Rest of the Dashboard (Calendar, Tasks, Stats) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="space-y-6">
-           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4 md:p-5">
+           <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-4">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Calendar className="w-5 h-5 text-blue-600" />{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h3>
                 <div className="flex gap-1"><button onClick={handlePrevMonth} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500"><ChevronLeft className="w-5 h-5" /></button><button onClick={handleNextMonth} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500"><ChevronRight className="w-5 h-5" /></button></div>
@@ -695,464 +495,175 @@ export const ParentDashboard = ({ initialStudentId, viewingAsId }: ParentDashboa
               <div className="grid grid-cols-7 gap-1 md:gap-2">{renderCalendarDays()}</div>
            </div>
 
-           {/* TASKS LIST */}
            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5 flex flex-col h-full min-h-[400px]">
               <div className="flex justify-between items-center mb-4">
-                 <div>
-                    <h3 className="text-lg font-bold text-gray-800">Schedule for {selectedDate.toLocaleDateString()}</h3>
-                    <p className="text-sm text-gray-500">{pendingPlans.length + pendingTests.length} Pending Tasks</p>
-                 </div>
+                 <h3 className="text-lg font-bold text-gray-800">Schedule for {selectedDate.toLocaleDateString()}</h3>
                  <div className="flex gap-2">
-                    <button onClick={() => setModalMode('study')} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition font-bold text-xs flex items-center gap-1"><Plus className="w-3 h-3"/> Study</button>
-                    <button onClick={() => setModalMode('test')} className="p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition font-bold text-xs flex items-center gap-1"><Plus className="w-3 h-3"/> Test</button>
+                    <button onClick={() => setModalMode('study')} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition font-bold text-xs"><Plus className="w-3 h-3 inline mr-1"/> Study</button>
+                    <button onClick={() => setModalMode('test')} className="p-2 bg-orange-50 text-orange-600 rounded-lg hover:bg-orange-100 transition font-bold text-xs"><Plus className="w-3 h-3 inline mr-1"/> Test</button>
                  </div>
               </div>
-
-              <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
-                 {/* Pending Items */}
-                 {pendingPlans.map(plan => {
-                    const subject = subjects.find(s => s.id === plan.subjectId);
-                    const topic = topics.find(t => t.id === plan.topicId);
-                    return (
-                       <div key={plan.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white shadow-sm group hover:border-blue-200 transition">
-                          <div className={`p-2 rounded-lg ${subject?.color || 'bg-gray-100'} text-white`}>{getIconComponent(subject?.icon || '')}</div>
-                          <div className="flex-1">
-                             <h4 className="font-bold text-gray-800 text-sm">{topic?.name}</h4>
-                             <p className="text-xs text-gray-500 font-medium">Study • {plan.duration} mins</p>
-                          </div>
-                          <button 
-                            onClick={(e) => { 
-                               e.stopPropagation();
-                               setDeleteItem({ type: 'plan', id: plan.id, title: topic?.name || 'Study Plan' });
-                            }} 
-                            className="text-gray-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
-                          >
-                            <X className="w-4 h-4"/>
-                          </button>
-                       </div>
-                    )
-                 })}
-                 {pendingTests.map(test => {
-                    const subject = subjects.find(s => s.id === test.subjectId);
-                    return (
-                       <div key={test.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white shadow-sm group hover:border-blue-200 transition">
-                          <div className={`p-2 rounded-lg ${test.type === TestType.MOCK ? 'bg-purple-100 text-purple-600' : (subject?.color || 'bg-gray-100')} ${test.type !== TestType.MOCK ? 'text-white' : ''}`}>
-                             {test.type === TestType.MOCK ? <Layers className="w-4 h-4"/> : getIconComponent(subject?.icon || '')}
-                          </div>
-                          <div className="flex-1">
-                             <h4 className="font-bold text-gray-800 text-sm">{test.title}</h4>
-                             <p className="text-xs text-gray-500 font-medium">{test.type === TestType.MOCK ? 'Mock Exam' : 'Test'} • {test.duration} mins</p>
-                          </div>
-                          <button 
-                            onClick={(e) => { 
-                               e.stopPropagation();
-                               setDeleteItem({ type: 'test', id: test.id, title: test.title });
-                            }} 
-                            className="text-gray-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
-                          >
-                            <X className="w-4 h-4"/>
-                          </button>
-                       </div>
-                    )
-                 })}
-                 
-                 {/* Empty State */}
-                 {pendingPlans.length === 0 && pendingTests.length === 0 && (
-                    <div className="py-8 text-center text-gray-400">
-                       <Smile className="w-10 h-10 mx-auto mb-2 opacity-30"/>
-                       <p className="text-sm">No tasks scheduled for this day.</p>
-                    </div>
-                 )}
-
-                 {/* Completed Items Divider */}
-                 {(completedPlans.length > 0 || completedTests.length > 0) && (
-                    <div className="relative py-4">
-                       <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-                       <div className="relative flex justify-center"><span className="bg-white px-2 text-xs text-gray-400 font-bold uppercase tracking-wider">Completed</span></div>
-                    </div>
-                 )}
-                 
-                 {completedTests.map(test => (
-                    <div key={test.id} onClick={() => handleViewReport(test)} className="flex items-center gap-3 p-3 rounded-xl border border-green-100 bg-green-50/30 opacity-80 hover:opacity-100 cursor-pointer transition">
-                       <div className="p-2 rounded-lg bg-green-100 text-green-600"><CheckCircle className="w-4 h-4"/></div>
+              <div className="flex-1 overflow-y-auto space-y-3">
+                 {pendingPlans.map(plan => (
+                    <div key={plan.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white shadow-sm group">
+                       <div className="p-2 rounded-lg bg-orange-100 text-orange-600"><BookOpen className="w-4 h-4"/></div>
                        <div className="flex-1">
-                          <h4 className="font-bold text-gray-800 text-sm decoration-gray-400">{test.title}</h4>
-                          <p className="text-xs text-gray-500 font-medium">Score: {test.score}/{test.questions.length} ({Math.round((test.score || 0)/test.questions.length * 100)}%)</p>
+                          <h4 className="font-bold text-gray-800 text-sm">{topics.find(t => t.id === plan.topicId)?.name || 'Study Session'}</h4>
+                          <p className="text-xs text-gray-500">{plan.duration} mins</p>
                        </div>
-                       <ChevronRight className="w-4 h-4 text-gray-400"/>
+                       <button onClick={() => deletePlan(plan.id)} className="text-gray-300 hover:text-red-500 p-2"><Trash2 className="w-4 h-4"/></button>
+                    </div>
+                 ))}
+                 {pendingTests.map(test => (
+                    <div key={test.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 bg-white shadow-sm group">
+                       <div className="p-2 rounded-lg bg-blue-100 text-blue-600"><BrainCircuit className="w-4 h-4"/></div>
+                       <div className="flex-1">
+                          <h4 className="font-bold text-gray-800 text-sm">{test.title}</h4>
+                          <p className="text-xs text-gray-500">{test.duration} mins</p>
+                       </div>
+                       <button onClick={() => deleteTest(test.id)} className="text-gray-300 hover:text-red-500 p-2"><Trash2 className="w-4 h-4"/></button>
                     </div>
                  ))}
               </div>
            </div>
         </div>
 
-        {/* RECENT ACTIVITY & STATS */}
         <div className="space-y-6">
-           {/* Quick Stats */}
            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-blue-600 text-white p-5 rounded-3xl shadow-lg shadow-blue-200">
-                 <div className="flex items-center gap-2 mb-1 opacity-80"><Target className="w-4 h-4"/> <span className="text-xs font-bold uppercase tracking-wide">Avg Score</span></div>
+              <div className="bg-blue-600 text-white p-5 rounded-3xl shadow-lg">
+                 <p className="text-xs font-bold uppercase opacity-80 mb-1">Average Score</p>
                  <div className="text-3xl font-display font-bold">
                     {completedTests.length > 0 ? Math.round(completedTests.reduce((acc, t) => acc + (t.score || 0)/t.questions.length, 0) / completedTests.length * 100) : 0}%
                  </div>
               </div>
               <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                 <div className="flex items-center gap-2 mb-1 text-gray-400"><Star className="w-4 h-4 text-yellow-500"/> <span className="text-xs font-bold uppercase tracking-wide">Coins</span></div>
+                 <p className="text-xs font-bold uppercase text-gray-400 mb-1">Available Coins</p>
                  <div className="text-3xl font-display font-bold text-gray-900">{selectedStudent?.coins || 0}</div>
               </div>
            </div>
-
-           {/* Quick Actions */}
            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100 space-y-3">
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Quick Actions</h4>
-              <button onClick={() => setModalMode('mock')} className="w-full text-left p-3 rounded-xl bg-purple-50 text-purple-700 font-bold text-sm flex items-center gap-3 hover:bg-purple-100 transition"><Layers className="w-4 h-4"/> Assign Mock Exam</button>
-              <button onClick={() => setModalMode('baseline')} className="w-full text-left p-3 rounded-xl bg-slate-50 text-slate-700 font-bold text-sm flex items-center gap-3 hover:bg-slate-100 transition"><TrendingUp className="w-4 h-4"/> Assign Baseline Test</button>
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Advanced Actions</h4>
+              <button onClick={() => setModalMode('mock')} className="w-full text-left p-3 rounded-xl bg-purple-50 text-purple-700 font-bold text-sm flex items-center gap-3"><Layers className="w-4 h-4"/> Assign Mock Exam</button>
+              <button onClick={() => setModalMode('baseline')} className="w-full text-left p-3 rounded-xl bg-slate-50 text-slate-700 font-bold text-sm flex items-center gap-3"><TrendingUp className="w-4 h-4"/> Assign Baseline Test</button>
            </div>
         </div>
       </div>
 
-      {/* --- DELETE CONFIRMATION MODAL --- */}
-      {deleteItem && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-           <div className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-gray-100 text-center space-y-4" onClick={e => e.stopPropagation()}>
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-500 mb-2">
-                 <Trash2 className="w-8 h-8"/>
-              </div>
-              <div>
-                 <h3 className="text-xl font-bold text-gray-900">Delete Item?</h3>
-                 <p className="text-sm text-gray-500 mt-1">
-                    Are you sure you want to delete <span className="font-bold text-gray-800">{deleteItem.title}</span>?
-                 </p>
-              </div>
-              <div className="flex gap-3 pt-2">
-                 <button onClick={() => setDeleteItem(null)} className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition">Cancel</button>
-                 <button onClick={() => {
-                    if (deleteItem.type === 'plan') deletePlan(deleteItem.id);
-                    else deleteTest(deleteItem.id);
-                    setDeleteItem(null);
-                 }} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 shadow-lg shadow-red-200 transition">Delete</button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* --- MODALS SECTION --- */}
-      {/* ... [Existing Modals] ... */}
-      {modalMode === 'report' && selectedReportTest && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-           <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
-              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                 <h3 className="font-bold text-xl text-gray-900">{selectedReportTest.title} Report</h3>
-                 <button onClick={() => setModalMode('none')} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X className="w-5 h-5"/></button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                 <div className="flex justify-center gap-12">
-                    <div className="text-center">
-                       <p className="text-xs font-bold text-gray-400 uppercase">Score</p>
-                       <p className="text-4xl font-display font-bold text-blue-600">{selectedReportTest.score}/{selectedReportTest.questions.length}</p>
-                    </div>
-                    <div className="text-center">
-                       <p className="text-xs font-bold text-gray-400 uppercase">Percentage</p>
-                       <p className={`text-4xl font-display font-bold ${((selectedReportTest.score || 0)/selectedReportTest.questions.length) >= 0.7 ? 'text-green-500' : 'text-orange-500'}`}>{Math.round(((selectedReportTest.score || 0)/selectedReportTest.questions.length)*100)}%</p>
-                    </div>
-                 </div>
-                 {selectedReportTest.analysis ? (
-                    <div className="bg-blue-50 p-6 rounded-2xl border border-blue-100 space-y-4">
-                       <div className="flex items-center gap-2 text-blue-800 font-bold mb-2">
-                          <BrainCircuit className="w-5 h-5"/> AI Analysis
-                       </div>
-                       <p className="text-sm text-blue-900 leading-relaxed">{selectedReportTest.analysis.summary}</p>
-                       <div className="grid grid-cols-2 gap-4 mt-4">
-                          <div className="bg-white/60 p-3 rounded-xl">
-                             <p className="text-xs font-bold text-green-700 uppercase mb-1">Strengths</p>
-                             <ul className="text-sm text-green-900 space-y-1">{selectedReportTest.analysis.strengths.map(s => <li key={s}>• {s}</li>)}</ul>
-                          </div>
-                          <div className="bg-white/60 p-3 rounded-xl">
-                             <p className="text-xs font-bold text-orange-700 uppercase mb-1">Focus Areas</p>
-                             <ul className="text-sm text-orange-900 space-y-1">{selectedReportTest.analysis.weaknesses.map(w => <li key={w}>• {w}</li>)}</ul>
-                          </div>
-                       </div>
-                    </div>
-                 ) : (
-                    <div className="text-center">
-                       <button onClick={handleGenerateRoadmap} disabled={isRoadmapLoading} className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2 mx-auto">
-                          {isRoadmapLoading ? <Loader2 className="animate-spin w-4 h-4"/> : <BrainCircuit className="w-4 h-4"/>} Generate AI Analysis
-                       </button>
-                    </div>
-                 )}
-
-                 <div className="border-t border-gray-100 pt-6">
-                    <div className="flex gap-4 justify-center">
-                       <button onClick={() => setViewingMistakes(!viewingMistakes)} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${viewingMistakes ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                          {viewingMistakes ? 'Hide Mistakes' : 'View Mistakes'}
-                       </button>
-                       <button onClick={() => handlePrintTest(selectedReportTest)} className="px-4 py-2 rounded-lg font-bold text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 flex items-center gap-2">
-                          <Printer className="w-4 h-4"/> Print
-                       </button>
-                    </div>
-                    
-                    {viewingMistakes && (
-                       <div className="mt-6 space-y-4">
-                          {selectedReportTest.questions.map((q, i) => {
-                             const studentAns = selectedReportTest.studentAnswers?.[i];
-                             const isCorrect = studentAns === q.correctAnswerIndex;
-                             if (isCorrect) return null;
-                             return (
-                                <div key={i} className="p-4 bg-red-50 rounded-xl border border-red-100 text-sm">
-                                   <p className="font-bold text-gray-800 mb-2">{i+1}. {q.text}</p>
-                                   <p className="text-red-600 mb-1"><span className="font-bold">Student Answer:</span> {q.options[studentAns || 0]}</p>
-                                   <p className="text-green-700"><span className="font-bold">Correct Answer:</span> {q.options[q.correctAnswerIndex]}</p>
-                                   {q.explanation && <p className="text-gray-600 mt-2 text-xs bg-white p-2 rounded border border-red-100">💡 {q.explanation}</p>}
-                                </div>
-                             )
-                          })}
-                       </div>
-                    )}
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* --- REWARDS MODAL --- */}
       {modalMode === 'rewards' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-           <div className="bg-white w-full max-w-4xl rounded-3xl shadow-xl overflow-hidden border border-gray-100 max-h-[90vh] flex flex-col">
-              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
-                 <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><ShoppingBag className="w-5 h-5 text-yellow-600"/> Reward Center</h3>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+           <div className="bg-white w-full max-w-4xl rounded-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                 <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><ShoppingBag className="w-5 h-5 text-yellow-600"/> Reward Management</h3>
                  <button onClick={() => setModalMode('none')} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X className="w-5 h-5"/></button>
               </div>
-              
               <div className="flex border-b border-gray-100 px-6 bg-white shrink-0">
-                 <button onClick={() => setRewardTab('catalog')} className={`py-4 text-sm font-bold border-b-2 px-4 transition ${rewardTab === 'catalog' ? 'border-yellow-500 text-yellow-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Reward Catalog</button>
-                 <button onClick={() => setRewardTab('requests')} className={`py-4 text-sm font-bold border-b-2 px-4 transition ${rewardTab === 'requests' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
-                    Requests {rewardRequests.filter(r => r.status === 'PENDING' && myStudents.some(s => s.id === r.studentId)).length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">{rewardRequests.filter(r => r.status === 'PENDING' && myStudents.some(s => s.id === r.studentId)).length}</span>}
-                 </button>
-                 <button onClick={() => setRewardTab('rules')} className={`py-4 text-sm font-bold border-b-2 px-4 transition ${rewardTab === 'rules' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>Point Rules</button>
+                 <button onClick={() => setRewardTab('catalog')} className={`py-4 text-sm font-bold border-b-2 px-4 ${rewardTab === 'catalog' ? 'border-yellow-500 text-yellow-600' : 'border-transparent text-gray-400'}`}>Catalog</button>
+                 <button onClick={() => setRewardTab('requests')} className={`py-4 text-sm font-bold border-b-2 px-4 ${rewardTab === 'requests' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400'}`}>Requests</button>
+                 <button onClick={() => setRewardTab('rules')} className={`py-4 text-sm font-bold border-b-2 px-4 ${rewardTab === 'rules' ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-400'}`}>Rules</button>
               </div>
-
-              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50">
+              <div className="flex-1 overflow-y-auto p-6">
                  {rewardTab === 'catalog' && (
                     <div className="space-y-6">
-                       {/* Create Reward Form */}
-                       <div className="bg-white p-4 rounded-2xl border border-yellow-100 shadow-sm">
-                          <h4 className="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wide">Add New Reward</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-                             <input className="p-2 border border-gray-200 rounded-xl text-sm" placeholder="Reward Name" value={rewardForm.name} onChange={e => setRewardForm({...rewardForm, name: e.target.value})} />
-                             <input className="p-2 border border-gray-200 rounded-xl text-sm" type="number" placeholder="Cost" value={rewardForm.cost} onChange={e => setRewardForm({...rewardForm, cost: Number(e.target.value)})} />
-                             <select className="p-2 border border-gray-200 rounded-xl text-sm" value={rewardForm.icon} onChange={e => setRewardForm({...rewardForm, icon: e.target.value})}>
-                                {REWARD_ICONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
-                             </select>
-                             <button onClick={handleCreateReward} disabled={!rewardForm.name} className="bg-yellow-500 text-white font-bold rounded-xl text-sm hover:bg-yellow-600 transition disabled:opacity-50">Add Reward</button>
-                          </div>
-                          <div className="flex items-center gap-4 text-xs font-bold text-gray-500">
-                             <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={!!rewardForm.approvalRequired} onChange={e => setRewardForm({...rewardForm, approvalRequired: e.target.checked})} /> Require Approval</label>
-                          </div>
+                       <div className="bg-white p-4 rounded-2xl border border-yellow-100 grid grid-cols-1 md:grid-cols-4 gap-3">
+                          <input className="p-2 border border-gray-200 rounded-xl text-sm" placeholder="Reward Name" value={rewardForm.name} onChange={e => setRewardForm({...rewardForm, name: e.target.value})} />
+                          <input className="p-2 border border-gray-200 rounded-xl text-sm" type="number" placeholder="Cost" value={rewardForm.cost} onChange={e => setRewardForm({...rewardForm, cost: Number(e.target.value)})} />
+                          <select className="p-2 border border-gray-200 rounded-xl text-sm" value={rewardForm.icon} onChange={e => setRewardForm({...rewardForm, icon: e.target.value})}>
+                             {REWARD_ICONS.map(ic => <option key={ic} value={ic}>{ic}</option>)}
+                          </select>
+                          <button onClick={handleCreateReward} disabled={!rewardForm.name} className="bg-yellow-500 text-white font-bold rounded-xl text-sm hover:bg-yellow-600 transition">Add Reward</button>
                        </div>
-
-                       {/* Rewards List */}
-                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           {availableRewards.map(r => (
                              <div key={r.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm relative group">
                                 <div className="flex justify-between items-start">
                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${r.color}`}>{getRewardIcon(r.icon)}</div>
-                                   <div className="text-right">
-                                      <p className="font-black text-yellow-600">{r.cost}</p>
-                                      <p className="text-[10px] text-gray-400 uppercase font-bold">Coins</p>
-                                   </div>
+                                   <p className="font-black text-yellow-600">{r.cost}</p>
                                 </div>
                                 <h4 className="font-bold text-gray-900 mt-2">{r.name}</h4>
-                                <p className="text-xs text-gray-500 mt-1">{r.approvalRequired ? 'Approval Required' : 'Instant Redeem'}</p>
-                                <button onClick={() => deleteReward(r.id)} className="absolute top-2 right-2 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition"><Trash2 className="w-4 h-4"/></button>
+                                <button onClick={() => deleteReward(r.id)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4"/></button>
                              </div>
                           ))}
                        </div>
                     </div>
                  )}
-
                  {rewardTab === 'requests' && (
                     <div className="space-y-4">
-                       {rewardRequests.filter(r => myStudents.some(s => s.id === r.studentId)).length === 0 && (
-                          <div className="text-center py-12 text-gray-400"><p>No reward requests found.</p></div>
-                       )}
                        {rewardRequests.filter(r => myStudents.some(s => s.id === r.studentId)).map(req => (
-                          <div key={req.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-                             <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">{getRewardIcon(req.rewardIcon)}</div>
-                                <div>
-                                   <h4 className="font-bold text-gray-900">{req.rewardName}</h4>
-                                   <p className="text-xs text-gray-500 font-bold">{users.find(u => u.id === req.studentId)?.name} • {new Date(req.requestDate).toLocaleDateString()}</p>
-                                   <p className="text-xs font-bold text-yellow-600">{req.cost} Coins</p>
-                                </div>
+                          <div key={req.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
+                             <div>
+                                <h4 className="font-bold text-gray-900">{req.rewardName}</h4>
+                                <p className="text-xs text-gray-500 font-bold">{users.find(u => u.id === req.studentId)?.name}</p>
                              </div>
-                             <div className="flex items-center gap-2">
+                             <div className="flex gap-2">
                                 {req.status === 'PENDING' && (
                                    <>
-                                      <button onClick={() => rejectRewardRequest(req.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs hover:bg-red-100">Reject</button>
-                                      <button onClick={() => approveRewardRequest(req.id)} className="px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-xs hover:bg-green-700 shadow-md shadow-green-200">Approve</button>
+                                      <button onClick={() => rejectRewardRequest(req.id)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-xs">Reject</button>
+                                      <button onClick={() => approveRewardRequest(req.id)} className="px-4 py-2 bg-green-600 text-white rounded-xl font-bold text-xs">Approve</button>
                                    </>
                                 )}
-                                {req.status === 'APPROVED' && <span className="px-3 py-1 bg-green-100 text-green-700 rounded-lg text-xs font-bold">Approved</span>}
-                                {req.status === 'REJECTED' && <span className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-xs font-bold">Rejected</span>}
+                                {req.status === 'APPROVED' && <span className="text-green-600 font-bold">Approved</span>}
                              </div>
                           </div>
                        ))}
                     </div>
                  )}
-
-                 {rewardTab === 'rules' && (
-                    <div className="space-y-6">
-                       <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-purple-900 text-sm">
-                          Configure how many coins students earn for different activities.
-                       </div>
-                       
-                       <div className="grid grid-cols-1 gap-4">
-                          {pointRules.map(rule => (
-                             <div key={rule.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-                                <div>
-                                   <h4 className="font-bold text-gray-900">{rule.category}</h4>
-                                   <p className="text-xs text-gray-500">Base Points: {rule.basePoints}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                   <button 
-                                      onClick={() => updatePointRule({...rule, basePoints: Math.max(0, rule.basePoints - 5)})} 
-                                      className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-                                   >-</button>
-                                   <span className="font-bold w-8 text-center">{rule.basePoints}</span>
-                                   <button 
-                                      onClick={() => updatePointRule({...rule, basePoints: rule.basePoints + 5})} 
-                                      className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center hover:bg-gray-200"
-                                   >+</button>
-                                </div>
-                             </div>
-                          ))}
-                       </div>
-
-                       <div className="pt-6 border-t border-gray-100">
-                          <h4 className="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wide">Manual Adjustment</h4>
-                          <div className="flex gap-3">
-                             <select className="p-2 border border-gray-200 rounded-xl text-sm font-bold bg-white" onChange={e => setSelectedStudentId(e.target.value)} value={selectedStudentId}>
-                                {myStudents.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                             </select>
-                             <input type="number" placeholder="Points (+/-)" className="p-2 border border-gray-200 rounded-xl text-sm w-24" value={manualPointForm.amount} onChange={e => setManualPointForm({...manualPointForm, amount: Number(e.target.value)})} />
-                             <input type="text" placeholder="Reason" className="flex-1 p-2 border border-gray-200 rounded-xl text-sm" value={manualPointForm.reason} onChange={e => setManualPointForm({...manualPointForm, reason: e.target.value})} />
-                             <button onClick={handleManualPoints} className="bg-blue-600 text-white font-bold px-4 rounded-xl text-sm hover:bg-blue-700">Apply</button>
-                          </div>
-                       </div>
-                    </div>
-                 )}
               </div>
            </div>
         </div>
       )}
 
-      {/* --- STUDY PLAN MODAL --- */}
       {modalMode === 'study' && (
-         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white w-full max-w-lg rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                  <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><BookOpen className="w-5 h-5 text-blue-600"/> Assign Study Task</h3>
-                  <button onClick={() => setModalMode('none')} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X className="w-5 h-5"/></button>
+         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-lg rounded-3xl shadow-xl overflow-hidden">
+               <div className="p-6 border-b border-gray-100 flex justify-between bg-gray-50">
+                  <h3 className="font-bold text-lg">Assign Study Task</h3>
+                  <button onClick={() => setModalMode('none')}><X/></button>
                </div>
                <div className="p-6 space-y-4">
-                  <div>
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Subject</label>
-                     <select className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium" value={studySubjectId} onChange={e => {setStudySubjectId(e.target.value); setStudyTopicId('');}}>
-                        {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                     </select>
+                  <select className="w-full p-3 border rounded-xl" value={studySubjectId} onChange={e => setStudySubjectId(e.target.value)}>
+                     {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <select className="w-full p-3 border rounded-xl" value={studyTopicId} onChange={e => setStudyTopicId(e.target.value)}>
+                     <option value="">Select Topic</option>
+                     {topics.filter(t => t.subjectId === studySubjectId).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                  <input type="number" className="w-full p-3 border rounded-xl" value={studyDuration} onChange={e => setStudyDuration(Number(e.target.value))} />
+                  <button onClick={handleAssignStudy} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl">Assign Plan</button>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {modalMode === 'test' && (
+         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+               <div className="p-6 border-b border-gray-100 flex justify-between bg-gray-50">
+                  <h3 className="font-bold text-lg">Create Test</h3>
+                  <button onClick={() => setModalMode('none')}><X/></button>
+               </div>
+               <div className="p-6 space-y-5 overflow-y-auto">
+                  <select className="w-full p-3 border rounded-xl" value={testSubjectId} onChange={e => setTestSubjectId(e.target.value)}>
+                     {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border p-2 rounded-xl">
+                     {availableTestTopics.map(t => (
+                        <label key={t.id} className="flex items-center gap-2">
+                           <input type="checkbox" checked={testTopicIds.includes(t.id)} onChange={() => toggleTestTopic(t.id)}/>
+                           <span className="text-sm">{t.name}</span>
+                        </label>
+                     ))}
                   </div>
-                  <div>
-                     <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Topic</label>
-                     <select className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium" value={studyTopicId} onChange={e => setStudyTopicId(e.target.value)}>
-                        <option value="">Select Topic</option>
-                        {topics.filter(t => t.subjectId === studySubjectId).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                     </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Duration (Mins)</label>
-                        <input type="number" className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium" value={studyDuration} onChange={e => setStudyDuration(Number(e.target.value))} min={5} step={5}/>
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Notes (Optional)</label>
-                        <input type="text" className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium" placeholder="Read pages 10-12" value={studyNotes} onChange={e => setStudyNotes(e.target.value)}/>
-                     </div>
-                  </div>
-                  <button onClick={handleAssignStudy} disabled={!studyTopicId} className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition disabled:opacity-50 mt-2">
-                     Assign Plan
+                  <button onClick={handleAssignTest} disabled={isGenerating} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl">
+                     {isGenerating ? "Generating..." : "Generate & Assign"}
                   </button>
                </div>
             </div>
          </div>
       )}
 
-      {/* --- TEST CREATION MODAL --- */}
-      {modalMode === 'test' && (
-         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-xl overflow-hidden border border-gray-100 max-h-[90vh] flex flex-col">
-               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50 shrink-0">
-                  <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2"><BrainCircuit className="w-5 h-5 text-orange-600"/> Create Test</h3>
-                  <button onClick={() => setModalMode('none')} className="p-2 hover:bg-gray-200 rounded-full text-gray-500"><X className="w-5 h-5"/></button>
-               </div>
-               <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                  <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-4 flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                        <Database className={`w-5 h-5 ${testSource === 'BANK' ? 'text-orange-600' : 'text-gray-400'}`}/>
-                        <span className="text-sm font-bold text-gray-700">Question Source:</span>
-                     </div>
-                     <div className="flex bg-white rounded-lg p-1 border border-orange-200 shadow-sm">
-                        <button onClick={() => setTestSource('AI')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${testSource === 'AI' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>AI Generator</button>
-                        <button onClick={() => setTestSource('BANK')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition ${testSource === 'BANK' ? 'bg-orange-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Question Bank</button>
-                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Subject</label>
-                        <select className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 font-medium" value={testSubjectId} onChange={e => {setTestSubjectId(e.target.value); setTestTopicIds([]);}}>
-                           {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                        </select>
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Difficulty</label>
-                        <select className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 font-medium" value={testDifficulty} onChange={e => setTestDifficulty(e.target.value as DifficultyLevel)}>
-                           <option value={DifficultyLevel.EASY}>Easy</option>
-                           <option value={DifficultyLevel.MEDIUM}>Medium</option>
-                           <option value={DifficultyLevel.HARD}>Hard</option>
-                           <option value={DifficultyLevel.MIXED}>Mixed</option>
-                        </select>
-                     </div>
-                  </div>
-
-                  <div>
-                     <div className="flex justify-between items-center mb-2">
-                        <label className="block text-xs font-bold text-gray-500 uppercase">Select Topics</label>
-                        <button onClick={toggleSelectAllTopics} className="text-xs font-bold text-blue-600 hover:underline">
-                           {testTopicIds.length === availableTestTopics.length ? 'Deselect All' : 'Select All'}
-                        </button>
-                     </div>
-                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-40 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200">
-                        {availableTestTopics.map(t => (
-                           <label key={t.id} className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition border ${testTopicIds.includes(t.id) ? 'bg-orange-50 border-orange-200' : 'hover:bg-white border-transparent'}`}>
-                              <div className={`w-4 h-4 rounded border flex items-center justify-center ${testTopicIds.includes(t.id) ? 'bg-orange-500 border-orange-500' : 'bg-white border-gray-300'}`}>
-                                 {testTopicIds.includes(t.id) && <Check className="w-3 h-3 text-white"/>}
-                              </div>
-                              <input type="checkbox" className="hidden" checked={testTopicIds.includes(t.id)} onChange={() => toggleTestTopic(t.id)}/>
-                              <span className={`text-xs font-bold ${testTopicIds.includes(t.id) ? 'text-orange-800' : 'text-gray-600'}`}>{t.name}</span>
-                           </label>
-                        ))}
-                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-5">
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Question Count</label>
-                        <input type="number" className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 font-medium" value={testQuestionCount} onChange={e => setTestQuestionCount(Number(e.target.value))} min={5} max={50}/>
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Time Limit (Mins)</label>
-                        <input type="number" className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 font-medium" value={testDuration} onChange={e => setTestDuration(Number(e.target.value))} min={5}/>
-                     </div>
-                  </div>
-               </div>
-               <div className="p-
+      <div className="absolute bottom-4 text-center w-full text-xs font-bold text-blue-900/30">
+         © 2024 11+ Yodha
+      </div>
+    </div>
+  );
+};

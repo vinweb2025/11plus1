@@ -1,15 +1,13 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { Question, AIGeneratedTopic, RoadmapAnalysis } from '../types';
 
 export const getAiClient = () => {
-  // FIX: Use import.meta.env for Vite instead of process.env
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    console.warn("VITE_GEMINI_API_KEY is missing from environment");
+  if (!process.env.API_KEY) {
+    console.warn("API_KEY is missing from environment");
     return null;
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY });
 };
 
 const getMockQuestions = (subjectInput: string | string[], count: number, difficulty: string): Question[] => {
@@ -93,7 +91,7 @@ export const generateTestQuestions = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -144,7 +142,6 @@ export const generateCurriculum = async (
   const ai = getAiClient();
   
   if (!ai) {
-    // Mock Response for Demo when API Key is missing
     return new Promise(resolve => {
       setTimeout(() => {
         resolve([
@@ -184,7 +181,7 @@ export const generateCurriculum = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -237,7 +234,6 @@ export const generateRoadmapSuggestion = async (
 ): Promise<RoadmapAnalysis | null> => {
   const ai = getAiClient();
 
-  // Mock if no API key
   if (!ai) {
     return new Promise(resolve => {
       setTimeout(() => {
@@ -275,7 +271,7 @@ export const generateRoadmapSuggestion = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
       config: {
         responseMimeType: "application/json",
